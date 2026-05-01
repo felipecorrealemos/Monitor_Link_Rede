@@ -1,0 +1,45 @@
+@using Monitor_Link_Rede.Models
+
+<div class="history">
+    @if (Incidents.Count == 0)
+    {
+        <p>Nenhum evento registrado ainda.</p>
+    }
+    else
+    {
+        @foreach (var incident in Incidents)
+        {
+            <article class="event-item">
+                <div class="event-grid">
+                    <div class="event-left">
+                        <strong class="tag-drop">QUEDA</strong>
+                        @if (incident.ReturnTime.HasValue)
+                        {
+                            <strong class="tag-return">RETORNO</strong>
+                        }
+                        else
+                        {
+                            <span class="pending-return">Aguardando retorno...</span>
+                        }
+                    </div>
+
+                    <div class="event-right">
+                        <span class="drop-time">@incident.DropTime.ToString("dd/MM/yyyy HH:mm:ss")</span>
+                        @if (incident.ReturnTime.HasValue)
+                        {
+                            <span class="return-time">@incident.ReturnTime.Value.ToString("dd/MM/yyyy HH:mm:ss")</span>
+                            @if (incident.OfflineDuration.HasValue)
+                            {
+                                <span class="offline-duration">Offline: @incident.OfflineDuration.Value.ToString(@"hh\:mm\:ss")</span>
+                            }
+                        }
+                    </div>
+                </div>
+            </article>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<ConnectivityIncidentView> Incidents { get; set; } = [];
+}

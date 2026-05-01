@@ -1,0 +1,276 @@
+@page "/"
+@using Monitor_Link_Rede.Models
+@using Monitor_Link_Rede.Components.Components
+@inject ConnectivityMonitorService Monitor
+@inject LogStorageService Storage
+@inject ChartDataService ChartData
+@inject IPreferenceService Preferences
+@implements IDisposable
+
+<PageTitle>Monitor de Conectividade</PageTitle>
+
+<div class="page">
+    <header class="hero">
+        <h1>Monitor de Conectividade</h1>
+        <p>Monitoramento continuo com historico local e grafico de quedas.</p>
+    </header>
+
+    <section class="panel card">
+        <div class="actions">
+            <button class="btn btn-start" @onclick="StartAsync" disabled="@Monitor.State.IsMonitoring">Iniciar Monitoramento</button>
+            <button class="btn btn-stop" @onclick="StopAsync" disabled="@(!Monitor.State.IsMonitoring)">Parar Monitoramento</button>
+        </div>
+
+        <div class="status-grid">
+            <div>
+                <p class="label">Status da conexao</p>
+                <p class="status-badge @(Monitor.State.IsOnline ? "online" : "offline")">@(Monitor.State.IsOnline ? "Online" : "Offline")</p>
+            </div>
+            <div>
+                <p class="label">Monitoramento</p>
+                <p>@(Monitor.State.IsMonitoring ? "Ativo" : "Parado")</p>
+            </div>
+            <div>
+                <p class="label">Ultima verificacao</p>
+                <p>@(Monitor.State.LastCheckTime == default ? "-" : Monitor.State.LastCheckTime.ToString("dd/MM/yyyy HH:mm:ss"))</p>
+            </div>
+            <div>
+                <p class="label">Ultima mensagem</p>
+                <p>@Monitor.State.LastMessage</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="view-tabs">
+            <button class="tab-btn @(ActiveTab == ViewTab.History ? "active" : null)" @onclick="() => SetTab(ViewTab.History)">Historico de Quedas</button>
+            <button class="tab-btn @(ActiveTab == ViewTab.Chart ? "active" : null)" @onclick="() => SetTab(ViewTab.Chart)">Grafico</button>
+        </div>
+
+        @if (ActiveTab == ViewTab.History)
+        {
+            <div class="chart-header">
+                <h2>Historico de Eventos</h2>
+                <div class="filters">
+                    @foreach (var option in Enum.GetValues<PeriodFilter>())
+                    {
+                        <button class="filter-btn @(HistoryFilter == option ? "active" : null)" @onclick="() => ChangeHistoryFilterAsync(option)">@GetFilterLabel(option)</button>
+                    }
+                </div>
+            </div>
+            <IncidentList Incidents="FilteredHistoryIncidents" />
+        }
+        else
+        {
+            <div class="chart-header">
+                <h2>Analise de Quedas</h2>
+                <div class="filters">
+                    @foreach (var option in Enum.GetValues<PeriodFilter>())
+                    {
+                        <button class="filter-btn @(ChartFilter == option ? "active" : null)" @onclick="() => ChangeChartFilterAsync(option)">@GetFilterLabel(option)</button>
+                    }
+                </div>
+            </div>
+
+            <div class="chart-wrap">
+                <NetworkChart CanvasId="networkEventsChart" Dataset="ChartDataset" OnPeriodClicked="OnChartPeriodClicked" />
+            </div>
+
+            <div class="selected-period-block">
+                <h3>Detalhes do Periodo Selecionado</h3>
+                @if (string.IsNullOrWhiteSpace(SelectedPeriodLabel))
+                {
+                    <p>Clique em uma barra do grafico para ver as ocorrencias deste periodo.</p>
+                }
+                else
+                {
+                    <p class="selected-period-label">Periodo: @SelectedPeriodLabel</p>
+                    <IncidentList Incidents="SelectedPeriodIncidents" />
+                }
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private List<NetworkEventRecord> Events { get; set; } = [];
+    private List<ConnectivityIncidentView> Incidents { get; set; } = [];
+    private List<ConnectivityIncidentView> FilteredHistoryIncidents { get; set; } = [];
+    private List<ConnectivityIncidentView> SelectedPeriodIncidents { get; set; } = [];
+    private ChartDatasetResult ChartDataset { get; set; } = new();
+    private PeriodFilter ChartFilter { get; set; }
+    private PeriodFilter HistoryFilter { get; set; }
+    private int _lastEventCount = -1;
+    private ViewTab ActiveTab { get; set; } = ViewTab.History;
+    private string? SelectedPeriodKey { get; set; }
+    private string? SelectedPeriodLabel { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        ChartFilter = Preferences.GetChartFilter();
+        HistoryFilter = Preferences.GetHistoryFilter();
+        Monitor.StateChanged += OnMonitorStateChanged;
+        await LoadAsync(forceChart: true);
+    }
+
+    private async Task StartAsync()
+    {
+        await Monitor.StartAsync();
+        await LoadAsync(forceChart: false);
+    }
+
+    private async Task StopAsync()
+    {
+        await Monitor.StopAsync();
+        await LoadAsync(forceChart: false);
+    }
+
+    private void SetTab(ViewTab tab)
+    {
+        ActiveTab = tab;
+    }
+
+    private async Task ChangeHistoryFilterAsync(PeriodFilter filter)
+    {
+        HistoryFilter = filter;
+        Preferences.SetHistoryFilter(filter);
+        ApplyHistoryFilter();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ChangeChartFilterAsync(PeriodFilter filter)
+    {
+        ChartFilter = filter;
+        Preferences.SetChartFilter(filter);
+        SelectedPeriodKey = null;
+        SelectedPeriodLabel = null;
+        SelectedPeriodIncidents = [];
+        await LoadAsync(forceChart: true);
+    }
+
+    private async Task OnChartPeriodClicked(string periodKey)
+    {
+        SelectedPeriodKey = periodKey;
+        SelectedPeriodLabel = BuildSelectedPeriodLabel(periodKey, ChartFilter);
+        SelectedPeriodIncidents = Incidents.Where(x => IsIncidentInPeriod(x, periodKey, ChartFilter)).ToList();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadAsync(bool forceChart)
+    {
+        Events = (await Storage.GetAllAsync()).OrderBy(x => x.Timestamp).ToList();
+        Incidents = BuildIncidents(Events);
+        ApplyHistoryFilter();
+
+        if (forceChart || Events.Count != _lastEventCount)
+        {
+            ChartDataset = await ChartData.BuildDatasetAsync(ChartFilter);
+            _lastEventCount = Events.Count;
+        }
+
+        if (!string.IsNullOrWhiteSpace(SelectedPeriodKey))
+        {
+            SelectedPeriodIncidents = Incidents.Where(x => IsIncidentInPeriod(x, SelectedPeriodKey, ChartFilter)).ToList();
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void ApplyHistoryFilter()
+    {
+        var now = DateTime.Now;
+        FilteredHistoryIncidents = HistoryFilter switch
+        {
+            PeriodFilter.Today => Incidents.Where(x => x.DropTime.Date == now.Date).ToList(),
+            PeriodFilter.Last7Days => Incidents.Where(x => x.DropTime >= now.AddDays(-7)).ToList(),
+            PeriodFilter.Last30Days => Incidents.Where(x => x.DropTime >= now.AddDays(-30)).ToList(),
+            _ => Incidents.ToList()
+        };
+    }
+
+    private async Task OnMonitorStateChanged()
+    {
+        await LoadAsync(forceChart: false);
+    }
+
+    private static bool IsIncidentInPeriod(ConnectivityIncidentView incident, string periodKey, PeriodFilter filter)
+    {
+        return filter switch
+        {
+            PeriodFilter.Today => incident.DropTime.ToString("yyyy-MM-ddTHH:mm") == periodKey,
+            PeriodFilter.Last7Days => incident.DropTime.ToString("yyyy-MM-dd") == periodKey,
+            PeriodFilter.Last30Days => incident.DropTime.ToString("yyyy-MM-dd") == periodKey,
+            _ => incident.DropTime.ToString("yyyy-MM") == periodKey
+        };
+    }
+
+    private static string BuildSelectedPeriodLabel(string periodKey, PeriodFilter filter)
+    {
+        return filter switch
+        {
+            PeriodFilter.Today when DateTime.TryParse(periodKey, out var dtToday) => dtToday.ToString("dd/MM/yyyy HH:mm"),
+            PeriodFilter.Last7Days when DateTime.TryParse(periodKey, out var dt7) => dt7.ToString("dd/MM/yyyy"),
+            PeriodFilter.Last30Days when DateTime.TryParse(periodKey, out var dt30) => dt30.ToString("dd/MM/yyyy"),
+            _ => periodKey
+        };
+    }
+
+    private static List<ConnectivityIncidentView> BuildIncidents(List<NetworkEventRecord> records)
+    {
+        var incidents = new List<ConnectivityIncidentView>();
+        ConnectivityIncidentView? openIncident = null;
+
+        foreach (var item in records)
+        {
+            if (item.EventType == "QUEDA")
+            {
+                if (openIncident is not null)
+                {
+                    incidents.Add(openIncident);
+                }
+
+                openIncident = new ConnectivityIncidentView
+                {
+                    DropTime = item.Timestamp
+                };
+
+                continue;
+            }
+
+            if (item.EventType == "RETORNO" && openIncident is not null)
+            {
+                openIncident.ReturnTime = item.Timestamp;
+                openIncident.OfflineDuration = item.OfflineDuration ?? (item.Timestamp - openIncident.DropTime);
+                incidents.Add(openIncident);
+                openIncident = null;
+            }
+        }
+
+        if (openIncident is not null)
+        {
+            incidents.Add(openIncident);
+        }
+
+        incidents.Reverse();
+        return incidents;
+    }
+
+    private static string GetFilterLabel(PeriodFilter filter) => filter switch
+    {
+        PeriodFilter.Today => "Hoje",
+        PeriodFilter.Last7Days => "Ultimos 7 dias",
+        PeriodFilter.Last30Days => "Ultimos 30 dias",
+        _ => "Tudo"
+    };
+
+    public void Dispose()
+    {
+        Monitor.StateChanged -= OnMonitorStateChanged;
+    }
+
+    private enum ViewTab
+    {
+        History,
+        Chart
+    }
+}

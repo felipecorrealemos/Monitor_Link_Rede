@@ -1,0 +1,49 @@
+:root {
+    font-family: "OpenSansRegular", "Segoe UI", sans-serif;
+    color: #122235;
+    background: radial-gradient(circle at top right, #dae8f6 0%, #f4f8fc 35%, #f2f6fa 100%);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+}
+
+h1, h2, h3 {
+    margin: 0;
+}
+
+p {
+    margin: 0;
+}
+
+button {
+    cursor: pointer;
+    font: inherit;
+}
+
+#blazor-error-ui {
+    background: #ffefce;
+    bottom: 0;
+    box-shadow: 0 -1px 4px rgba(0, 0, 0, 0.15);
+    display: none;
+    left: 0;
+    padding: 0.7rem 1rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    float: right;
+}
+
+.status-bar-safe-area {
+    display: none;
+}

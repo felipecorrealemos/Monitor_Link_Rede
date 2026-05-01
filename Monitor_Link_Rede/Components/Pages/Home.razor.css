@@ -1,0 +1,129 @@
+.page {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 1.2rem;
+    padding-top: calc(1.2rem + env(safe-area-inset-top, 0px));
+    display: grid;
+    gap: 1rem;
+}
+
+.hero {
+    background: linear-gradient(120deg, #001f3f, #0a4d68);
+    color: #f5fbff;
+    border-radius: 18px;
+    padding: 1.2rem;
+}
+
+.card {
+    background: #ffffff;
+    border: 1px solid #d8e2ec;
+    border-radius: 16px;
+    padding: 1rem;
+}
+
+.actions {
+    display: flex;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+}
+
+.btn {
+    border: 0;
+    border-radius: 12px;
+    padding: 0.8rem 1rem;
+    color: #fff;
+    font-weight: 600;
+    min-width: 200px;
+}
+
+.btn:disabled { opacity: .5; }
+.btn-start { background: #1f7a1f; }
+.btn-stop { background: #b82929; }
+
+.status-grid {
+    margin-top: 1rem;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(140px, 1fr));
+    gap: 0.8rem;
+}
+
+.label { color: #576575; font-size: .9rem; }
+.status-badge { font-size: 1.4rem; font-weight: 700; }
+.online { color: #1f7a1f; }
+.offline { color: #b82929; }
+
+.view-tabs {
+    display: flex;
+    gap: .6rem;
+    margin-bottom: .8rem;
+}
+
+.tab-btn {
+    border: 1px solid #b5c3d1;
+    background: #eef4fa;
+    border-radius: 999px;
+    padding: .5rem .9rem;
+    font-weight: 600;
+}
+
+.tab-btn.active {
+    background: #0a4d68;
+    color: #fff;
+    border-color: #0a4d68;
+}
+
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: .7rem;
+    flex-wrap: wrap;
+}
+
+.filters { display: flex; gap: .5rem; flex-wrap: wrap; }
+.filter-btn {
+    border: 1px solid #b5c3d1;
+    background: #eef4fa;
+    border-radius: 999px;
+    padding: .5rem .8rem;
+}
+
+.filter-btn.active {
+    background: #0a4d68;
+    color: #fff;
+    border-color: #0a4d68;
+}
+
+.chart-wrap {
+    height: 260px;
+    min-height: 260px;
+    margin-top: .4rem;
+}
+
+.chart-canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+}
+
+@media (max-width: 760px) {
+    .page {
+        padding-top: calc(2rem + env(safe-area-inset-top, 0px));
+    }
+
+    .status-grid { grid-template-columns: 1fr 1fr; }
+    .btn { width: 100%; min-width: 0; }
+    .chart-wrap { height: 220px; min-height: 220px; }
+}
+
+.selected-period-block {
+    margin-top: 1rem;
+    padding-top: .6rem;
+    border-top: 1px solid #e3eaf2;
+}
+
+.selected-period-label {
+    color: #274c6f;
+    font-weight: 700;
+    margin-bottom: .5rem;
+}

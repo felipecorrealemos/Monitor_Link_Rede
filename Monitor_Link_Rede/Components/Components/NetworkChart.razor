@@ -1,0 +1,49 @@
+@using Microsoft.JSInterop
+@using Monitor_Link_Rede.Models
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<canvas id="@CanvasId" class="chart-canvas"></canvas>
+
+@code {
+    private string? _lastSignature;
+    private DotNetObjectReference<NetworkChart>? _dotNetRef;
+
+    [Parameter] public string CanvasId { get; set; } = "networkChart";
+    [Parameter] public ChartDatasetResult? Dataset { get; set; }
+    [Parameter] public EventCallback<string> OnPeriodClicked { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Dataset is null)
+        {
+            return;
+        }
+
+        var signature = string.Join('|', Dataset.PeriodKeys) + "::" + string.Join(',', Dataset.DropByPeriod);
+        if (!firstRender && signature == _lastSignature)
+        {
+            return;
+        }
+
+        _lastSignature = signature;
+        _dotNetRef ??= DotNetObjectReference.Create(this);
+
+        await JS.InvokeVoidAsync("networkCharts.render", CanvasId, Dataset.Labels, Dataset.PeriodKeys, Dataset.DropByPeriod, _dotNetRef);
+    }
+
+    [JSInvokable]
+    public async Task OnChartPointClicked(string periodKey)
+    {
+        if (OnPeriodClicked.HasDelegate)
+        {
+            await OnPeriodClicked.InvokeAsync(periodKey);
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _dotNetRef?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}
