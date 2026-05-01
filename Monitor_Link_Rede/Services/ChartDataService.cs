@@ -32,6 +32,7 @@ public sealed class ChartDataService
             OfflineCountByPeriod = grouped.Select(g => g.Count(r => !r.IsOnline)).ToArray(),
             OfflineMinutesByPeriod = grouped.Select(g => g.Where(r => r.OfflineDuration.HasValue).Sum(r => r.OfflineDuration!.Value.TotalMinutes)).ToArray()
         };
+
     }
 
     private static IEnumerable<NetworkEventRecord> ApplyFilter(IReadOnlyList<NetworkEventRecord> data, PeriodFilter filter)
